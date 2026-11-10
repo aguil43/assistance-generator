@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de Asistencia, Retardos, Faltas y Reportes PDF</title>
+  <link rel="stylesheet" href="/static/css/styles.css?v=2.1">
+</head>
+<body>
+  <header class="top-bar">
+    <div class="container top-bar__inner">
+      <div class="brand">
+        <span class="brand__badge" aria-hidden="true">⏱</span>
+        <div>
+          <h1 class="brand__title">Analizador de Reloj Checador y Reportes PDF</h1>
+          <p class="brand__subtitle">
+            Lunes–Viernes: 08:15 a 18:00 (6 reg.) · Sábado: 09:00 a 13:00 (2 reg.) · Domingo: Descanso
+          </p>
+        </div>
+      </div>
+      <div class="top-bar__actions">
+        <button type="button" id="btn-export-pdf" class="btn btn--primary" disabled>
+          <span aria-hidden="true">🔒</span> Descargar PDF Protegido
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main-layout">
+    <!-- Notificación global accesible -->
+    <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
+
+    <!-- Fila Superior: Carga de Archivo + Panel de Configuración Dinámica y Festivos -->
+    <section class="grid-two-cols" aria-label="Carga de archivo, configuración de cálculo y días festivos">
+      <!-- Columna Izquierda: Subida de Excel + Días Festivos y Periodo -->
+      <div class="stack-col">
+        <div class="card">
+          <div class="card__header">
+            <h2 class="card__title">1. Archivo del Reloj Checador</h2>
+            <span class="badge badge--neutral" id="file-badge">Sin archivo</span>
+          </div>
+
+          <form id="upload-form" action="/api/upload" method="POST" enctype="multipart/form-data">
+            <div class="dropzone" id="dropzone">
+              <input
+                type="file"
+                id="excel-file-input"
+                name="file"
+                accept=".xlsx,.xlsm,.csv"
+                class="visually-hidden"
+                aria-describedby="upload-hint"
+              >
+              <label for="excel-file-input" class="dropzone__label">
+                <span class="dropzone__icon" aria-hidden="true">📊</span>
+                <span class="dropzone__primary">Seleccionar archivo Excel (.xlsx) o arrastrar aquí</span>
+                <span id="upload-hint" class="dropzone__hint">
+                  Acepta el formato directo descargado del reloj checador (Reporte de Eventos)
+                </span>
+              </label>
+            </div>
+
+            <div class="quick-demo-bar">
+              <span class="quick-demo-bar__label">Ejemplos:</span>
+              <button type="button" id="btn-load-sample" class="btn btn--secondary btn--sm">
+                Ejemplo adjunto (Lorena 1)
+              </button>
+              <button type="button" id="btn-load-extended" class="btn btn--ghost btn--sm">
+                Semana completa (L-S, Falta y Sábado)
+              </button>
+              <a href="/api/sample-excel?extra_cases=true" class="link-download" download>Descargar .xlsx</a>
+            </div>
+          </form>
+        </div>
+
+        <!-- Apartado de Rango del Periodo y Días Festivos -->
+        <div class="card">
+          <div class="card__header">
+            <div>
+              <h2 class="card__title">2. Periodo y Días Festivos Oficiales</h2>
+              <p class="card__desc">
+                Los días de Lunes a Sábado sin checadas marcan <strong>FALTA</strong> salvo que se declaren aquí como festivos.
+              </p>
+            </div>
+            <span class="badge badge--holiday" id="holidays-badge">0 festivos</span>
+          </div>
+
+          <div class="form-row-two">
+            <div class="field">
+              <label for="period-start-input">Inicio del periodo</label>
+              <span id="pstart-hint" class="hint">Detectado del Excel (ajustable).</span>
+              <input
+                type="date"
+                id="period-start-input"
+                name="period_start"
+                aria-describedby="pstart-hint"
+              >
+            </div>
+
+            <div class="field">
+              <label for="period-end-input">Fin del periodo</label>
+              <span id="pend-hint" class="hint">Amplíelo si faltó el sábado al final.</span>
+              <input
+                type="date"
+                id="period-end-input"
+                name="period_end"
+                aria-describedby="pend-hint"
+              >
+            </div>
+          </div>
+
+          <div class="period-actions-bar">
+            <button type="button" id="btn-reset-period" class="btn btn--ghost btn--sm" disabled>
+              Restaurar fechas originales del Excel
+            </button>
+            <button type="button" id="btn-apply-period" class="btn btn--secondary btn--sm">
+              Actualizar Rango de Periodo
+            </button>
+          </div>
+
+          <hr class="divider">
+
+          <form id="holiday-form">
+            <fieldset class="fieldset-clean">
+              <legend class="field-legend">Agregar día festivo / inhábil en el periodo</legend>
+              <span id="holiday-hint" class="hint">
+                Los días festivos no generan faltas ni descuentos para ningún empleado.
+              </span>
+              <div class="holiday-add-row">
+                <div class="field field--compact">
+                  <label for="holiday-date-input">Fecha festiva *</label>
+                  <input
+                    type="date"
+                    id="holiday-date-input"
+                    name="holiday_date"
+                    required
+                    aria-describedby="holiday-hint"
+                  >
+                </div>
+                <div class="field field--compact">
+                  <label for="holiday-label-input">Motivo / Nombre del festivo</label>
+                  <input
+                    type="text"
+                    id="holiday-label-input"
+                    name="holiday_label"
+                    maxlength="100"
+                    placeholder="Ej. Día festivo oficial / Aniversario"
+                  >
+                </div>
+                <div class="holiday-add-btn-wrap">
+                  <button type="submit" class="btn btn--secondary">
+                    + Agregar Festivo
+                  </button>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+          <div id="holidays-list" class="holidays-chips" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <!-- Columna Derecha: Configuración de Reglas, Retardos, Salario y Horas por Falta -->
+      <div class="card">
+        <div class="card__header">
+          <h2 class="card__title">3. Reglas de Retardo, Salario y Descuento por Falta</h2>
+          <span class="badge badge--info">Configurable</span>
+        </div>
+
+        <form id="config-form">
+          <fieldset class="fieldset-clean">
+            <legend class="field-legend">Modo de evaluación de retardos (Switch adaptable)</legend>
+            <span id="mode-hint" class="hint">
+              Lunes–Viernes evalúa 08:15, almuerzo y comida; Sábado evalúa entrada a las 09:00 hrs.
+            </span>
+            <div class="mode-switch" role="radiogroup" aria-describedby="mode-hint">
+              <div class="mode-switch__option">
+                <input
+                  type="radio"
+                  id="mode-fixed"
+                  name="tardiness_mode"
+                  value="fixed_time"
+                  checked
+                >
+                <label for="mode-fixed">
+                  <strong>Por Hora Límite Oficial</strong>
+                  <small>L-V: 08:15, 10:00, 15:00 · Sáb: 09:00 (1 min tarde = 1 min retardo)</small>
+                </label>
+              </div>
+              <div class="mode-switch__option">
+                <input
+                  type="radio"
+                  id="mode-duration"
+                  name="tardiness_mode"
+                  value="duration"
+                >
+                <label for="mode-duration">
+                  <strong>Por Duración de Bloque</strong>
+                  <small>Entrada 08:15 (Sáb 09:00) · Almuerzo máx. 20m · Comida máx. 60m</small>
+                </label>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="form-row-two">
+            <div class="field">
+              <label for="duplicate-margin-input">Margen entre checadas dobles (min)</label>
+              <span id="margin-hint" class="hint">Conserva siempre la 1.ª checada registrada.</span>
+              <input
+                type="number"
+                id="duplicate-margin-input"
+                name="duplicate_margin_minutes"
+                min="1"
+                max="60"
+                step="1"
+                value="5"
+                inputmode="numeric"
+                required
+                aria-describedby="margin-hint"
+                aria-errormessage="margin-error"
+              >
+              <div id="margin-error" class="error-msg">
+                <span aria-hidden="true">⚠</span> Ingrese un margen entero entre 1 y 60 minutos.
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="hourly-wage-input">Salario por hora del personal ($)</label>
+              <span id="wage-hint" class="hint">Base para calcular descuentos de retardos y faltas.</span>
+              <input
+                type="number"
+                id="hourly-wage-input"
+                name="hourly_wage"
+                min="0"
+                step="0.01"
+                value="0"
+                inputmode="decimal"
+                required
+                aria-describedby="wage-hint"
+                aria-errormessage="wage-error"
+              >
+              <div id="wage-error" class="error-msg">
+                <span aria-hidden="true">⚠</span> Ingrese un monto igual o mayor a 0.
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row-two">
+            <div class="field">
+              <label for="absence-weekday-input">Horas a descontar por falta (Lunes a Viernes)</label>
+              <span id="abs-lv-hint" class="hint">Configurable (ej. 8 hrs estándar, 8.42 hrs netas u 8.75 hrs).</span>
+              <input
+                type="number"
+                id="absence-weekday-input"
+                name="absence_hours_weekday"
+                min="0"
+                max="24"
+                step="0.01"
+                value="8"
+                inputmode="decimal"
+                required
+                aria-describedby="abs-lv-hint"
+                aria-errormessage="abs-lv-error"
+              >
+              <div id="abs-lv-error" class="error-msg">
+                <span aria-hidden="true">⚠</span> Ingrese un valor entre 0 y 24 horas.
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="absence-saturday-input">Horas a descontar por falta en Sábado</label>
+              <span id="abs-sab-hint" class="hint">Horario sabatino de 09:00 a 13:00 hrs = 4 horas por defecto.</span>
+              <input
+                type="number"
+                id="absence-saturday-input"
+                name="absence_hours_saturday"
+                min="0"
+                max="24"
+                step="0.01"
+                value="4"
+                inputmode="decimal"
+                required
+                aria-describedby="abs-sab-hint"
+                aria-errormessage="abs-sab-error"
+              >
+              <div id="abs-sab-error" class="error-msg">
+                <span aria-hidden="true">⚠</span> Ingrese un valor entre 0 y 24 horas.
+              </div>
+            </div>
+          </div>
+
+          <div class="schedule-summary-box">
+            <strong>Resumen de jornadas activas:</strong>
+            <ul>
+              <li><strong>Lunes a Viernes:</strong> Entrada 08:15 · Almuerzo 09:40–10:00 · Comida 14:00–15:00 · Salida 18:00+ (6 registros)</li>
+              <li><strong>Sábado:</strong> Entrada 09:00 · Salida 13:00+ (2 registros)</li>
+              <li><strong>Domingo y Festivos:</strong> Descanso sin generación de faltas ni descuentos</li>
+            </ul>
+          </div>
+
+          <div class="form-actions-end">
+            <button type="submit" id="btn-save-config" class="btn btn--secondary">
+              Aplicar Configuración y Recalcular
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- Resumen Ejecutivo de Indicadores (KPIs) -->
+    <section id="kpi-section" class="kpi-grid" aria-label="Indicadores del periodo" hidden>
+      <article class="kpi-card">
+        <span class="kpi-card__label">Periodo Evaluado</span>
+        <strong class="kpi-card__value kpi-card__value--sm" id="kpi-period">—</strong>
+        <span class="kpi-card__meta" id="kpi-employees">0 empleados</span>
+      </article>
+      <article class="kpi-card kpi-card--danger">
+        <span class="kpi-card__label">Incidencias / Faltas sin Justificar</span>
+        <strong class="kpi-card__value" id="kpi-missing">0</strong>
+        <span class="kpi-card__meta" id="kpi-users-missing">0 faltas completas</span>
+      </article>
+      <article class="kpi-card kpi-card--amber">
+        <span class="kpi-card__label">Notas / Justificaciones</span>
+        <strong class="kpi-card__value" id="kpi-justified">0</strong>
+        <span class="kpi-card__meta">Resaltadas en reporte PDF</span>
+      </article>
+      <article class="kpi-card">
+        <span class="kpi-card__label">Retardo Acumulado</span>
+        <strong class="kpi-card__value" id="kpi-tardiness">0 min</strong>
+        <span class="kpi-card__meta" id="kpi-mode-active">Modo: Hora límite</span>
+      </article>
+      <article class="kpi-card kpi-card--highlight">
+        <span class="kpi-card__label">Descuento Total (Retardos + Faltas)</span>
+        <strong class="kpi-card__value" id="kpi-discount">$0.00</strong>
+        <span class="kpi-card__meta" id="kpi-wage-meta">Retardos: $0.00 · Faltas: $0.00</span>
+      </article>
+    </section>
+
+    <!-- Sección 4: Menú de Justificación de Registros Faltantes y Faltas Completas -->
+    <section class="card" id="incidents-section" aria-labelledby="incidents-heading">
+      <div class="card__header">
+        <div>
+          <h2 class="card__title" id="incidents-heading">4. Menú de Checadas Faltantes, Faltas Completas y Penalizaciones</h2>
+          <p class="card__desc">
+            Justifique checadas omitidas (ej. regreso de comida o salida) o faltas de día completo. Al justificar una falta con penalización <strong>0</strong> se elimina el descuento del día y se anexa la observación al PDF.
+          </p>
+        </div>
+        <span class="badge badge--danger" id="missing-counter-badge">Sin registros cargados</span>
+      </div>
+
+      <form id="justify-form">
+        <fieldset id="justify-fieldset" class="fieldset-clean" disabled>
+          <legend class="visually-hidden">Capturar justificación y penalización de registro faltante o falta</legend>
+
+          <div class="form-row-two">
+            <!-- Requisito 1: Campo desplegable de usuarios con faltantes o faltas -->
+            <div class="field">
+              <label for="employee-select">Usuario con registros faltantes o faltas *</label>
+              <span id="emp-select-hint" class="hint">Personal con checadas incompletas o inasistencias de Lunes a Sábado.</span>
+              <select
+                id="employee-select"
+                name="employee_id"
+                required
+                aria-describedby="emp-select-hint"
+              >
+                <option value="">— Cargue un archivo primero —</option>
+              </select>
+            </div>
+
+            <!-- Requisito 2: Campo desplegable separado por día y registro / falta -->
+            <div class="field">
+              <label for="slot-select">Registro faltante o Falta completa (Día y bloque) *</label>
+              <span id="slot-select-hint" class="hint">Incluye checadas individuales y días con FALTA COMPLETA.</span>
+              <select
+                id="slot-select"
+                name="slot_target"
+                required
+                aria-describedby="slot-select-hint"
+              >
+                <option value="">— Seleccione un usuario —</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-justification">
+            <!-- Requisito 3: Campo de texto para escribir la justificación -->
+            <div class="field">
+              <label for="justification-input">Justificación de la ausencia del registro o falta (se imprimirá en el PDF) *</label>
+              <span id="just-hint" class="hint">Describa el motivo para anexarlo como nota resaltada en el reporte final.</span>
+              <textarea
+                id="justification-input"
+                name="justification"
+                rows="2"
+                maxlength="500"
+                required
+                aria-describedby="just-hint"
+                aria-errormessage="just-error"
+                placeholder="Ej. Incapacidad médica autorizada / Comisión con cliente / Olvido de checada..."
+              ></textarea>
+              <div id="just-error" class="error-msg">
+                <span aria-hidden="true">⚠</span> Escriba la justificación que aparecerá en el reporte PDF.
+              </div>
+            </div>
+
+            <!-- Requisito 4: Campo para agregar tiempo de retardo / penalización (>= 0) -->
+            <div class="field">
+              <label for="penalty-input">Tiempo de retardo / penalización (min) *</label>
+              <span id="penalty-hint" class="hint">
+                Use <strong>0</strong> para justificar sin descuento, o un entero positivo (min) para descontar tiempo.
+              </span>
+              <input
+                type="number"
+                id="penalty-input"
+                name="penalty_minutes"
+                min="0"
+                max="1440"
+                step="1"
+                value="0"
+                inputmode="numeric"
+                pattern="\d+"
+                required
+                aria-describedby="penalty-hint"
+                aria-errormessage="penalty-error"
+              >
+              <div id="penalty-error" class="error-msg">
+                <span aria-hidden="true">⚠</span> Solo se permiten números enteros desde 0 en adelante (sin negativos).
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions-between">
+            <span class="security-note" id="selected-slot-status">
+              Las columnas y filas con notas se resaltarán con color ámbar distintivo en la vista previa y en el PDF.
+            </span>
+            <button type="submit" id="btn-apply-justification" class="btn btn--amber">
+              Guardar Observación en Reporte
+            </button>
+          </div>
+        </fieldset>
+      </form>
+
+      <!-- Lista rápida de notas aplicadas -->
+      <div id="applied-notes-panel" class="applied-notes" hidden>
+        <h3 class="applied-notes__title">Observaciones registradas para el PDF</h3>
+        <div id="applied-notes-list" class="applied-notes__list"></div>
+      </div>
+    </section>
+
+    <!-- Sección 5: Vista Previa del Reporte Final -->
+    <section class="card" aria-labelledby="preview-heading">
+      <div class="card__header card__header--wrap">
+        <div>
+          <h2 class="card__title" id="preview-heading">5. Vista Previa del Reporte y Protección PDF</h2>
+          <p class="card__desc">
+            Revise días de lunes a viernes (6 reg.), sábados (2 reg.), domingos de descanso, festivos, faltas y descuentos antes de descargar el PDF blindado.
+          </p>
+        </div>
+
+        <div class="legend-pills" aria-label="Leyenda de colores del reporte">
+          <span class="legend-pill legend-pill--missing">
+            <span aria-hidden="true">●</span> Rojo: Faltante / FALTA completa
+          </span>
+          <span class="legend-pill legend-pill--note">
+            <span aria-hidden="true">★</span> Ámbar: Con Nota / Justificado
+          </span>
+          <span class="legend-pill legend-pill--late">
+            <span aria-hidden="true">▲</span> Naranja: Checada con retardo
+          </span>
+          <span class="legend-pill legend-pill--holiday">
+            <span aria-hidden="true">◆</span> Azul: Día Festivo
+          </span>
+        </div>
+      </div>
+
+      <div id="empty-preview" class="empty-state">
+        <p class="empty-state__title">Aún no se ha cargado ningún archivo de reloj checador</p>
+        <p class="empty-state__text">
+          Suba un archivo <code>.xlsx</code> arriba o presione <strong>"Semana completa (L-S, Falta y Sábado)"</strong> para probar todos los escenarios de inmediato.
+        </p>
+      </div>
+
+      <div id="preview-container" class="preview-stack" hidden></div>
+    </section>
+  </main>
+
+  <script type="module" src="/static/js/app.js?v=2.1"></script>
+</body>
+</html>
